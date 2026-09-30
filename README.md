@@ -1,6 +1,6 @@
 # Resumatch
 
-A weekly pipeline that pulls internship postings directly from company job boards and scores each one against my own criteria with an LLM — instead of relying on a generic job board's search, which kept surfacing postings that didn't actually fit what I was looking for.
+A weekly pipeline that pulls internship postings directly from company job boards and scores each one against my own criteria with an LLM instead of relying on a generic job board's search, which kept surfacing postings that didn't actually fit what I was looking for.
 
 ## What it does
 
@@ -52,7 +52,7 @@ Greenhouse APIs → Fetch & Parse → Title key cached?
    ```
    - `GROQ_API_KEY` is read automatically by the Groq client.
    - Resend requires a verified sending domain for `EMAIL_FROM` in production; for quick testing you can send from their sandbox address (`onboarding@resend.dev`) to your own verified email.
-   - If the Resend variables aren't set, the script just skips sending an email and prints a note — it won't break the rest of the run.
+   - If the Resend variables aren't set, the script just skips sending an email and prints a note. It won't break the rest of the run.
 3. Run it:
    ```bash
    python fetch_jobs.py
@@ -62,11 +62,11 @@ Greenhouse APIs → Fetch & Parse → Title key cached?
 ## Metrics
 
 - Processes ~500 postings per run, run weekly (~2,000/month) across each company's Greenhouse board
-- In a typical run, ~12 postings have 5–12 duplicate location-variants each — all caught by the title cache before they'd otherwise hit the LLM
+- In a typical run, ~12 postings have 5–12 duplicate location-variants each, all caught by the title cache before they'd otherwise hit the LLM
 
 ## What I learned
 
-This was my first project where AI did something end-to-end — automating a real weekly task — rather than just generating content in response to a single prompt. Most of what makes a pipeline like this reliable isn't the model call itself; it's the unglamorous data-cleaning, deduplication, and validation work around it. I also had to build around real-world instability along the way: a paid LLM provider that got too expensive to run weekly, a false "credits depleted" error from one provider, and a Groq model that got deprecated mid-build.
+This was my first project where AI did something end-to-end: automating a real weekly task rather than just generating content in response to a single prompt. Most of what makes a pipeline like this reliable isn't the model call itself, but rather the unglamorous data-cleaning, deduplication, and validation work around it. I also had to build around real-world instability along the way: a paid LLM provider that got too expensive to run weekly, a false "credits depleted" error from one provider, and a Groq model that got deprecated mid-build.
 
 ## Next steps
 
