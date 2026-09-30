@@ -1,3 +1,4 @@
+import os
 import requests
 import sqlite3
 import bs4
@@ -6,10 +7,17 @@ import html
 import json
 import time
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 client = Groq()
 
 CRITERIA = "Summer 2027 internship, SWE/AI/automation field, skills in Java, Python, C/C++, OOP, APIs, Claude API"
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+EMAIL_FROM = os.environ.get("EMAIL_FROM")
+EMAIL_TO = os.environ.get("EMAIL_TO")
 
 
 def clean_html(raw_html):
@@ -58,6 +66,64 @@ Respond ONLY with valid JSON in this exact format, no other text, no markdown co
 
 def get_title_key(title):
     return title.split(" - ")[0].strip()
+
+
+def send_email_summary(matches, total_scored):
+    """Emails a summary of this run's matches via Resend. No-ops if not configured."""
+    if not (RESEND_API_KEY and EMAIL_FROM and EMAIL_TO):
+        print(
+            "Email not configured (missing RESEND_API_KEY / EMAIL_FROM / EMAIL_TO) — skipping email."
+        )
+        return
+
+    if matches:
+        rows = "".join(f"""
+            <tr>
+                <td style="padding:8px;border-bottom:1px solid #eee;">
+                    <a href="{m['url']}">{m['title']}</a>
+                </td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">{m['company']}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">{m['fit_score']}/10</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">{m['reasoning']}</td>
+            </tr>
+            """ for m in matches)
+        body_html = f"""
+        <h2>Resumatch weekly run</h2>
+        <p>Scored {total_scored} new postings — {len(matches)} matched your criteria.</p>
+        <table style="border-collapse:collapse;width:100%;">
+            <tr style="text-align:left;">
+                <th style="padding:8px;border-bottom:2px solid #333;">Title</th>
+                <th style="padding:8px;border-bottom:2px solid #333;">Company</th>
+                <th style="padding:8px;border-bottom:2px solid #333;">Fit</th>
+                <th style="padding:8px;border-bottom:2px solid #333;">Why</th>
+            </tr>
+            {rows}
+        </table>
+        """
+    else:
+        body_html = f"""
+        <h2>Resumatch weekly run</h2>
+        <p>Scored {total_scored} new postings — no matches this week.</p>
+        """
+
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": EMAIL_FROM,
+            "to": [EMAIL_TO],
+            "subject": f"Resumatch: {len(matches)} new matches this week",
+            "html": body_html,
+        },
+    )
+
+    if response.status_code >= 300:
+        print(f"Email failed to send ({response.status_code}): {response.text}")
+    else:
+        print("Email summary sent.")
 
 
 # ---- Fetch and normalize from all companies ----
@@ -149,16 +215,24 @@ for row in already_scored:
 
 # ---- Score unscored jobs ----
 
+MAX_JOBS_PER_RUN = 500  # caps how many postings get processed in one run
+
 cursor.execute(
-    "SELECT job_id, slug, title, company, location FROM jobs WHERE fit_score IS NULL"
+    "SELECT job_id, slug, title, company, location, url FROM jobs WHERE fit_score IS NULL"
 )
-unscored_jobs = cursor.fetchall()
+unscored_jobs = cursor.fetchall()[:MAX_JOBS_PER_RUN]
 
 matches = []
 
 for row in unscored_jobs:
-    job_id, slug, title, company, location = row
-    job = {"job_id": job_id, "title": title, "company": company, "location": location}
+    job_id, slug, title, company, location, url = row
+    job = {
+        "job_id": job_id,
+        "title": title,
+        "company": company,
+        "location": location,
+        "url": url,
+    }
 
     key = get_title_key(title)
     was_cached = key in title_cache
@@ -205,3 +279,7 @@ for match in matches:
         "-",
         match["reasoning"],
     )
+
+# ---- Email summary ----
+
+send_email_summary(matches, len(unscored_jobs))
